@@ -1,10 +1,10 @@
 TODO:
-- [-] menu on highlight click
-- [-] comment on highlight
-- [-] highlight color picker
+- [x] menu on highlight click
+- [x] comment on highlight
+- [x] highlight color picker
 - [ ] show comment sticker
 - [ ] bookmark page
-- [ ]font customization bar
+- [ ] font customization bar
 - [ ] display highlights
  
 ISSUES:
