@@ -1,113 +1,332 @@
-import Image from 'next/image'
+'use client';
+
+import React, { useState, useEffect, useRef } from 'react'
+import { ReactReader } from 'react-reader'
+import { Search, Highlighter, BookMarked, MessageSquarePlus } from 'lucide-react'
+
+import { IReactReaderProps } from 'react-reader';
+import { Contents, Rendition } from 'epubjs';
+
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "../../components/ui/popover"
+
+import { Textarea } from "../../components/ui/textarea"
+
+class Highlight {
+  text: string;
+  cfiRange: string;
+  note: string;
+  color: string;
+  comment: string;
+  constructor(text: string, cfiRange: string, color: string, comment: string) {
+    this.text = text;
+    this.cfiRange = cfiRange;
+    this.note = '';
+    this.color = color;
+    this.comment = comment;
+  }
+
+  addHighlight(rendition: Rendition) {
+    rendition.annotations.add(
+      'highlight',
+      this.cfiRange,
+      {},
+      undefined,
+      'hl',
+      { 'fill': this.color, 'fill-opacity': '0.3', 'mix-blend-mode': 'multiply' }
+    );
+  }
+
+  removeHighlight(rendition: Rendition) {
+    rendition.annotations.remove(this.cfiRange, 'highlight');
+  }
+
+  updateColor(rendition: Rendition, newColor: string) {
+    this.color = newColor;
+    this.removeHighlight(rendition);
+    this.addHighlight(rendition);
+  }
+}
 
 export default function Home() {
+
+  const [size, setSize] = useState<number>(100)
+  const [location, setLocation] = useState<string | number | undefined>(undefined)
+  const [firstRenderDone, setFirstRenderDone] = useState<boolean>(false);
+  const readerContainerRef = useRef<HTMLDivElement | null>(null);
+
+  const [selectedCfiRange, setSelectedCfiRange] = useState<string | null>(null);
+  const [color, setColor] = useState<string>('#f59e0b');
+  const [isHighlighted, setIsHighlighted] = useState<boolean>(false);
+  const [noteInput, setNoteInput] = useState<string>('');
+  const [hasNote, setHasNote] = useState<boolean>(false);
+
+  const [selections, setSelections] = useState<Highlight[]>([]);
+  const [contextMenu, setContextMenu] = useState<{ visible: boolean; x: number; y: number }>({ visible: false, x: 0, y: 0 });
+
+  const renditionRef = useRef<Rendition | null>(null);
+
+  const changeSize = (newSize: number): void => {
+    setSize(newSize)
+  }
+
+  const handleToggleHighlight = (cfiRange: string | null, color: string, callback?: (newSelections: Highlight[]) => void) => {
+    if (!cfiRange) return;
+
+    const highlightIndex = selections.findIndex((selection) => selection.cfiRange === cfiRange);
+
+    if (highlightIndex !== -1) {
+      selections[highlightIndex].removeHighlight(renditionRef.current!);
+      setSelections(selections.filter((item) => item.cfiRange !== cfiRange));
+      setContextMenu({ visible: false, x: 0, y: 0 });
+    } else {
+      const range = renditionRef.current?.getRange(cfiRange);
+      if (range) {
+        const newHighlight = new Highlight(range.toString(), cfiRange, color, '');
+        newHighlight.addHighlight(renditionRef.current!);
+        const newSelections = selections.concat(newHighlight);
+        setSelections(newSelections);
+        callback?.(newSelections);
+        ((renditionRef.current?.getContents() as unknown) as Contents[]).forEach((content) => {
+          content.window.getSelection()?.removeAllRanges();
+        });
+
+      }
+    }
+    setIsHighlighted(highlightIndex === -1);
+  };
+
+  const updateHighlightColor = (newColor: string) => {
+    setColor(newColor);
+    if (selectedCfiRange) {
+      const highlightIndex = selections.findIndex((selection) => selection.cfiRange === selectedCfiRange);
+      if (highlightIndex !== -1) {
+        selections[highlightIndex].updateColor(renditionRef.current!, newColor);
+      }
+    }
+  };
+
+  const handleContextMenu = (rect: DOMRect, cfiRange: string): void => {
+    setSelectedCfiRange(cfiRange);
+    const width = readerContainerRef.current?.offsetWidth ?? 0;
+    const newX = rect.left > width ? rect.left - width : rect.left
+    setContextMenu({
+      visible: true,
+      x: newX + newX / 2,
+      y: rect.top + 50,
+    });
+
+    const highlighted = selections.some((selection) => selection.cfiRange === cfiRange);
+    setIsHighlighted(highlighted);
+    const hasNote = selections.some((selection) => selection.cfiRange === cfiRange && selection.note !== '');
+    setHasNote(hasNote);
+
+    renditionRef.current?.on('mousedown', () => {
+      setContextMenu({ visible: false, x: 0, y: 0 });
+    });
+  }
+
+  const handleNoteInput = (event: React.ChangeEvent<HTMLTextAreaElement> & React.KeyboardEvent<HTMLTextAreaElement>) => {
+    const isEnterKeyPressed = event.key === 'Enter';
+    const isShiftEnterKeyPressed = event.key === 'Enter' && event.shiftKey;
+    const isCfiRangeSelected = selectedCfiRange !== null;
+
+    setNoteInput(event.target.value);
+
+    if (isEnterKeyPressed && isCfiRangeSelected && !isShiftEnterKeyPressed) {
+      event.preventDefault();
+
+      const highlightIndex = selections.findIndex((selection) => selection.cfiRange === selectedCfiRange);
+
+      if (highlightIndex !== -1) {
+        selections[highlightIndex].note = noteInput;
+      } else {
+        handleToggleHighlight(selectedCfiRange, color, (newSelections) => {
+          const newHighlightIndex = newSelections.findIndex((selection) => selection.cfiRange === selectedCfiRange);
+
+          if (newHighlightIndex !== -1) {
+            newSelections[newHighlightIndex].note = noteInput;
+          } else {
+            console.error('New highlight not found in selections');
+          }
+        });
+      }
+      setContextMenu({ visible: false, x: 0, y: 0 });
+      setHasNote(true);
+      // addNoteSticker(selectedCfiRange, noteInput);
+    }
+  };
+
+  const addNoteSticker = () => {
+
+  };
+
+  const locationChanged = (epubcifi: string): void => {
+    if (!firstRenderDone) {
+      setLocation(localStorage.getItem('book-progress') ?? undefined)
+      setFirstRenderDone(true)
+      return
+    }
+
+    localStorage.setItem('book-progress', epubcifi)
+    setLocation(epubcifi)
+  }
+
+  useEffect(() => {
+    if (renditionRef.current) {
+      renditionRef.current.themes.fontSize(`${size}%`)
+
+      const setRenderSelection = (cfiRange: string, contents: Contents) => {
+        const selection = contents.window.getSelection();
+        if (selection) {
+          const range = selection.getRangeAt(0);
+          const rect = range.getBoundingClientRect();
+          handleContextMenu(rect, cfiRange);
+        }
+      }
+      renditionRef.current.on('selected', setRenderSelection)
+      renditionRef.current.on('markClicked', (cfiRange: string) => {
+        const range = renditionRef.current?.getRange(cfiRange);
+        const rect = range?.getBoundingClientRect();
+        handleContextMenu(rect!, cfiRange);
+      })
+
+      return () => {
+        renditionRef.current?.off('selected', setRenderSelection)
+      }
+    }
+
+  }, [size, setSelections, selections])
+
+
   return (
-    <main className="flex min-h-screen flex-col items-center justify-between p-24">
-      <div className="z-10 w-full max-w-5xl items-center justify-between font-mono text-sm lg:flex">
-        <p className="fixed left-0 top-0 flex w-full justify-center border-b border-gray-300 bg-gradient-to-b from-zinc-200 pb-6 pt-8 backdrop-blur-2xl dark:border-neutral-800 dark:bg-zinc-800/30 dark:from-inherit lg:static lg:w-auto  lg:rounded-xl lg:border lg:bg-gray-200 lg:p-4 lg:dark:bg-zinc-800/30">
-          Get started by editing&nbsp;
-          <code className="font-mono font-bold">src/app/page.tsx</code>
-        </p>
-        <div className="fixed bottom-0 left-0 flex h-48 w-full items-end justify-center bg-gradient-to-t from-white via-white dark:from-black dark:via-black lg:static lg:h-auto lg:w-auto lg:bg-none">
-          <a
-            className="pointer-events-none flex place-items-center gap-2 p-8 lg:pointer-events-auto lg:p-0"
-            href="https://vercel.com?utm_source=create-next-app&utm_medium=appdir-template&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            By{' '}
-            <Image
-              src="/vercel.svg"
-              alt="Vercel Logo"
-              className="dark:invert"
-              width={100}
-              height={24}
-              priority
-            />
-          </a>
+    <>
+      <div className="nav border-b p-5">
+        Waffle
+      </div>
+      <div className="h-screen">
+        <div className="reader h-5/6 w-3/4 border-r" ref={readerContainerRef}>
+          <ReactReader
+            location={location}
+            locationChanged={locationChanged}
+            url="https://react-reader.metabits.no/files/alice.epub"
+            getRendition={(rendition) => {
+              renditionRef.current = rendition
+              rendition.themes.register('custom', {
+                "*": {
+                  'font-family': 'Inter, sans-serif',
+                },
+              })
+              rendition.themes.select('custom')
+              renditionRef.current = rendition;
+              renditionRef.current.themes.default({
+                '::selection': {
+                  background: '#d9f2fd'
+                }
+              })
+              setSelections([])
+            }}
+          />
+          <div className="display-settings w-full border-t p-4 absolute">
+            <button onClick={() => changeSize(Math.max(80, size - 10))}> - </button>
+            <span>Current size: {size}%</span>
+            <button onClick={() => changeSize(Math.min(130, size + 10))}> + </button>
+          </div>
         </div>
       </div>
-
-      <div className="relative flex place-items-center before:absolute before:h-[300px] before:w-[480px] before:-translate-x-1/2 before:rounded-full before:bg-gradient-radial before:from-white before:to-transparent before:blur-2xl before:content-[''] after:absolute after:-z-20 after:h-[180px] after:w-[240px] after:translate-x-1/3 after:bg-gradient-conic after:from-sky-200 after:via-blue-200 after:blur-2xl after:content-[''] before:dark:bg-gradient-to-br before:dark:from-transparent before:dark:to-blue-700 before:dark:opacity-10 after:dark:from-sky-900 after:dark:via-[#0141ff] after:dark:opacity-40 before:lg:h-[360px]">
-        <Image
-          className="relative dark:drop-shadow-[0_0_0.3rem_#ffffff70] dark:invert"
-          src="/next.svg"
-          alt="Next.js Logo"
-          width={180}
-          height={37}
-          priority
-        />
+      <div
+        className="selections-list absolute bottom-4 right-4 z-10 bg-white"
+      >
+        Selection:
+        <ul>
+          {selections.map((highlight: Highlight, i: number) => (
+            <li key={i}>
+              <span>{highlight.text}</span>
+              <span>{highlight.note}</span>
+              <button
+                onClick={() => {
+                  renditionRef.current?.display(highlight.cfiRange)
+                }}
+              >
+                Show
+              </button>
+              <button
+                onClick={() => {
+                  renditionRef.current?.annotations.remove(highlight.cfiRange, 'highlight');
+                  setSelections(selections.filter((item, j) => j !== i))
+                }}
+              >
+                x
+              </button>
+            </li>
+          ))}
+        </ul>
       </div>
-
-      <div className="mb-32 grid text-center lg:mb-0 lg:grid-cols-4 lg:text-left">
-        <a
-          href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template&utm_campaign=create-next-app"
-          className="group rounded-lg border border-transparent px-5 py-4 transition-colors hover:border-gray-300 hover:bg-gray-100 hover:dark:border-neutral-700 hover:dark:bg-neutral-800/30"
-          target="_blank"
-          rel="noopener noreferrer"
+      {contextMenu.visible && (
+        <div className='context-menu border z-10 absolute absolute bg-white rounded-xl p-2 shadow-lg z-10'
+          style={{ top: contextMenu.y, left: contextMenu.x }}
         >
-          <h2 className={`mb-3 text-2xl font-semibold`}>
-            Docs{' '}
-            <span className="inline-block transition-transform group-hover:translate-x-1 motion-reduce:transform-none">
-              -&gt;
-            </span>
-          </h2>
-          <p className={`m-0 max-w-[30ch] text-sm opacity-50`}>
-            Find in-depth information about Next.js features and API.
-          </p>
-        </a>
+          <div className="hl flex space-x-6 m-2">
+            <button
+              className={`bg-amber-500 w-5 h-5 rounded-full ${color === '#f59e0b' ? 'ring-2 ring-offset-2 ring-offset-white ring-amber-400' : ''}`}
+              onClick={() => { updateHighlightColor('#f59e0b') }}
+            />
+            <button
+              className={`bg-violet-500 w-5 h-5 rounded-full ${color === '#8b5cf6' ? 'ring-2 ring-offset-2 ring-offset-white ring-violet-400' : ''}`}
+              onClick={() => { updateHighlightColor('#8b5cf6') }}
+            />
+            <button
+              className={`bg-sky-500 w-5 h-5 rounded-full ${color === '#0ea5e9' ? 'ring-2 ring-offset-2 ring-offset-white ring-sky-400' : ''}`}
+              onClick={() => { updateHighlightColor('#0ea5e9') }}
+            />
+            <button
+              className={`bg-lime-500 w-5 h-5 rounded-full ${color === '#84cc16' ? 'ring-2 ring-offset-2 ring-offset-white ring-lime-400' : ''}`}
+              onClick={() => { updateHighlightColor('#84cc16') }}
+            />
+          </div>
+          <div className="options space-x-1">
+            <button
+              className='hover:bg-gray-300 p-2 rounded'
+            >
+              <BookMarked />
+            </button>
+            <button
+              className='hover:bg-gray-300 p-2 rounded'
+            >
+              <Search />
+            </button>
+            <button
+              className={`hover:bg-gray-300 p-2 rounded ${isHighlighted ? "bg-gray-300" : ""}`}
+              onClick={() => {
+                handleToggleHighlight(selectedCfiRange ?? "", color)
+              }}
+            >
+              <Highlighter />
+            </button>
+            <Popover>
+              <PopoverTrigger className={`hover:bg-gray-300 p-2 rounded ${hasNote ? "bg-gray-300" : ""}`}>
+                <MessageSquarePlus />
+              </PopoverTrigger>
+              <PopoverContent
+                className='bg-white p-2 mt-2 rounded-xl shadow-lg z-10'
+              >
+                <Textarea
+                  className='w-full h-52 border-transparent p-2 rounded focus:outline-none'
+                  placeholder="Type your note here."
+                  value={noteInput}
+                  onChange={handleNoteInput}
+                  onKeyDown={handleNoteInput}
+                >
+                </Textarea>
+              </PopoverContent>
+            </Popover>
 
-        <a
-          href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          className="group rounded-lg border border-transparent px-5 py-4 transition-colors hover:border-gray-300 hover:bg-gray-100 hover:dark:border-neutral-700 hover:dark:bg-neutral-800 hover:dark:bg-opacity-30"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <h2 className={`mb-3 text-2xl font-semibold`}>
-            Learn{' '}
-            <span className="inline-block transition-transform group-hover:translate-x-1 motion-reduce:transform-none">
-              -&gt;
-            </span>
-          </h2>
-          <p className={`m-0 max-w-[30ch] text-sm opacity-50`}>
-            Learn about Next.js in an interactive course with&nbsp;quizzes!
-          </p>
-        </a>
-
-        <a
-          href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template&utm_campaign=create-next-app"
-          className="group rounded-lg border border-transparent px-5 py-4 transition-colors hover:border-gray-300 hover:bg-gray-100 hover:dark:border-neutral-700 hover:dark:bg-neutral-800/30"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <h2 className={`mb-3 text-2xl font-semibold`}>
-            Templates{' '}
-            <span className="inline-block transition-transform group-hover:translate-x-1 motion-reduce:transform-none">
-              -&gt;
-            </span>
-          </h2>
-          <p className={`m-0 max-w-[30ch] text-sm opacity-50`}>
-            Explore the Next.js 13 playground.
-          </p>
-        </a>
-
-        <a
-          href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template&utm_campaign=create-next-app"
-          className="group rounded-lg border border-transparent px-5 py-4 transition-colors hover:border-gray-300 hover:bg-gray-100 hover:dark:border-neutral-700 hover:dark:bg-neutral-800/30"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <h2 className={`mb-3 text-2xl font-semibold`}>
-            Deploy{' '}
-            <span className="inline-block transition-transform group-hover:translate-x-1 motion-reduce:transform-none">
-              -&gt;
-            </span>
-          </h2>
-          <p className={`m-0 max-w-[30ch] text-sm opacity-50`}>
-            Instantly deploy your Next.js site to a shareable URL with Vercel.
-          </p>
-        </a>
-      </div>
-    </main>
+          </div>
+        </div>
+      )}
+    </>
   )
 }
