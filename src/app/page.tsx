@@ -63,6 +63,7 @@ export default function Home() {
   const [isHighlighted, setIsHighlighted] = useState<boolean>(false);
   const [noteInput, setNoteInput] = useState<string>('');
   const [hasNote, setHasNote] = useState<boolean>(false);
+  const [bookmarks, setBookmarks] = useState<string[]>([]);
 
   const [selections, setSelections] = useState<Highlight[]>([]);
   const [contextMenu, setContextMenu] = useState<{ visible: boolean; x: number; y: number }>({ visible: false, x: 0, y: 0 });
