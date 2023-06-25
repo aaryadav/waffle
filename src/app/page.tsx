@@ -4,7 +4,7 @@ import React, { useState, useEffect, useRef } from 'react'
 import { ReactReader } from 'react-reader'
 import { Search, Highlighter, BookMarked, MessageSquarePlus } from 'lucide-react'
 
-import { IReactReaderProps } from 'react-reader';
+import { IReactReaderProps, IToc } from 'react-reader';
 import { Contents, Rendition } from 'epubjs';
 
 import {
@@ -51,10 +51,22 @@ class Highlight {
   }
 }
 
+
+class Bookmark {
+  location: string;
+  page: string;
+
+  constructor(location: string, page: string) {
+    this.location = location;
+    this.page = page;
+  }
+}
+
+
 export default function Home() {
 
   const [size, setSize] = useState<number>(100)
-  const [location, setLocation] = useState<string | number | undefined>(undefined)
+  const [location, setLocation] = useState<string | undefined>(undefined)
   const [firstRenderDone, setFirstRenderDone] = useState<boolean>(false);
   const readerContainerRef = useRef<HTMLDivElement | null>(null);
 
@@ -63,7 +75,10 @@ export default function Home() {
   const [isHighlighted, setIsHighlighted] = useState<boolean>(false);
   const [noteInput, setNoteInput] = useState<string>('');
   const [hasNote, setHasNote] = useState<boolean>(false);
-  const [bookmarks, setBookmarks] = useState<string[]>([]);
+  const [bookmarks, setBookmarks] = useState<Bookmark[]>([]);
+
+  const [page, setPage] = useState('')
+  const tocRef = useRef<IToc[]>([]);
 
   const [selections, setSelections] = useState<Highlight[]>([]);
   const [contextMenu, setContextMenu] = useState<{ visible: boolean; x: number; y: number }>({ visible: false, x: 0, y: 0 });
@@ -165,11 +180,30 @@ export default function Home() {
 
   };
 
+  const addBookmark = (location: string | undefined, page: string) => {
+    if (location) {
+      console.log(page);
+      const newBookmark = new Bookmark(location, page);
+      setBookmarks([...bookmarks, newBookmark]);
+    }
+  }
+
   const locationChanged = (epubcifi: string): void => {
     if (!firstRenderDone) {
       setLocation(localStorage.getItem('book-progress') ?? undefined)
       setFirstRenderDone(true)
       return
+    }
+
+    if (renditionRef.current && tocRef.current) {
+      const { displayed, href } = renditionRef.current.location.start
+      const chapter = tocRef.current.find(item => item.href === href)
+      const page = displayed.page
+      const total = displayed.total
+      setPage(
+        `Page ${page} of ${total} in chapter ${chapter ? chapter.label : 'n/a'
+        }`
+      )
     }
 
     localStorage.setItem('book-progress', epubcifi)
@@ -199,7 +233,6 @@ export default function Home() {
         renditionRef.current?.off('selected', setRenderSelection)
       }
     }
-
   }, [size, setSelections, selections])
 
 
@@ -230,7 +263,32 @@ export default function Home() {
               })
               setSelections([])
             }}
+            tocChanged={toc => (tocRef.current = toc)}
           />
+          <div className="flex">
+            <button
+              onClick={() => {
+                addBookmark(location, page)
+              }}
+            >
+              Bookmark
+            </button>
+            <div className="bookmarks overflow-y-auto">
+              <ul className="border">
+                {bookmarks.map((bookmark: Bookmark, i: number) => (
+                  <li key={i}>
+                    <button
+                      onClick={() => {
+                        renditionRef.current?.display(bookmark.location)
+                      }}
+                    >
+                      {bookmark.page}
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          </div>
           <div className="display-settings w-full border-t p-4 absolute">
             <button onClick={() => changeSize(Math.max(80, size - 10))}> - </button>
             <span>Current size: {size}%</span>
