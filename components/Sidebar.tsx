@@ -48,8 +48,10 @@ const Sidebar = ({ bookmarks, setBookmarks, selections, setSelections, rendition
                                 <ul className='space-y-4'>
                                     {selections.map((highlight: Highlight, i: number) => (
                                         <li key={i}>
-                                            <span>{highlight.text}</span>
-                                            <span>{highlight.note}</span>
+                                            <div className="flex flex-col space-y-2">
+                                                <span>{highlight.text}</span>
+                                                <span className="border-l-4 border-l-blue-400 pl-2">{highlight.note}</span>
+                                            </div>
                                             <div className='options space-x-2'>
                                                 <Button
                                                     className='rounded-full'
