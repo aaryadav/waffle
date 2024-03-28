@@ -13,7 +13,7 @@ import { Search, Highlighter, BookMarked, MessageSquarePlus, Bookmark as Bookmar
 const Widgets = ({setIsSans, isSans, size, changeSize, toggleBookmark, isBookmarked, location, page}) => {
     return (
         <div className="widgets absolute bottom-12 left-5 z-20 space-y-2">
-            <div className="font-settings">
+            {/* <div className="font-settings">
                 <Popover>
                     <PopoverTrigger>
                         <Button
@@ -52,11 +52,12 @@ const Widgets = ({setIsSans, isSans, size, changeSize, toggleBookmark, isBookmar
                         </div>
                     </PopoverContent>
                 </Popover>
-            </div>
+            </div> */}
             <div className="bookmark">
                 <Button
                     className=''
                     onClick={() => {
+                        console.log(location, page)
                         toggleBookmark(location, page)
                     }}
                 >

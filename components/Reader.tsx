@@ -4,6 +4,8 @@ import { ReactReader } from 'react-reader'
 
 import { IReactReaderProps, IToc } from 'react-reader';
 import { Contents, Rendition } from 'epubjs';
+import getSelectedText from 'epubjs';
+
 
 import { Highlight, Bookmark } from '../src/app/classes';
 
@@ -33,6 +35,9 @@ const Reader = ({ bookmarks, setBookmarks, selections, setSelections, renditionR
     const [isBookmarked, setIsBookmarked] = useState<boolean>(false);
 
     const [selectedCfiRange, setSelectedCfiRange] = useState<string | null>(null);
+    const [word, setWord] = useState('');
+
+
     const [color, setColor] = useState<string>('#f59e0b');
     const [isHighlighted, setIsHighlighted] = useState<boolean>(false);
     const [noteInput, setNoteInput] = useState<string>('');
@@ -86,23 +91,42 @@ const Reader = ({ bookmarks, setBookmarks, selections, setSelections, renditionR
 
     const handleContextMenu = (rect: DOMRect, cfiRange: string): void => {
         setSelectedCfiRange(cfiRange);
-        const width = readerContainerRef.current?.offsetWidth ?? 0;
-        const newX = rect.left > width ? rect.left - width : rect.left
+        const readerWidth = readerContainerRef.current?.offsetWidth ?? 0;
+        const readerHeight = readerContainerRef.current?.offsetHeight ?? 0;
+        const menuWidth = 200;
+        const menuHeight = 180;
+
+        let newX = rect.left;
+        let newY = rect.top;
+
+
+        if (rect.left + menuWidth > readerWidth) {
+            newX = readerWidth - menuWidth - (readerWidth / 2.5);
+        }
+
+        if (rect.top + menuHeight > readerHeight) {
+            newY = readerHeight - menuHeight;
+        }
+
         setContextMenu({
             visible: true,
-            x: newX + newX / 2,
-            y: rect.top + 50,
+            x: newX,
+            y: newY,
         });
 
         const highlighted = selections.some((selection) => selection.cfiRange === cfiRange);
         setIsHighlighted(highlighted);
+
         const hasNote = selections.some((selection) => selection.cfiRange === cfiRange && selection.note !== '');
         setHasNote(hasNote);
 
         renditionRef.current?.on('mousedown', () => {
             setContextMenu({ visible: false, x: 0, y: 0 });
         });
-    }
+
+        const range = renditionRef.current?.getRange(cfiRange);
+        setWord(range.toString())
+    };
 
     const handleNoteInput = (event: React.ChangeEvent<HTMLTextAreaElement> & React.KeyboardEvent<HTMLTextAreaElement>) => {
         const isEnterKeyPressed = event.key === 'Enter';
@@ -167,8 +191,7 @@ const Reader = ({ bookmarks, setBookmarks, selections, setSelections, renditionR
             const page = displayed.page
             const total = displayed.total
             setPage(
-                `Page ${page} of ${total} in chapter ${chapter ? chapter.label : 'n/a'
-                }`
+                `Page ${page} of ${total}${chapter ? ` in chapter ${chapter.label}` : ''}`
             )
         }
 
@@ -226,7 +249,7 @@ const Reader = ({ bookmarks, setBookmarks, selections, setSelections, renditionR
             <ReactReader
                 location={location}
                 locationChanged={locationChanged}
-                url="https://react-reader.metabits.no/files/alice.epub"
+                url="https://cloudflare-ipfs.com/ipfs/bafykbzaceaacdleb4kv7sfrjluz2ighyajlwur3i5ydxnfqmf5c2zplbzhyi2?filename=Paul%20Graham%20-%20Hackers%20and%20Painters_%20Big%20Ideas%20from%20the%20Computer%20Age-O%27Reilly%20Media%20%282004%29.epub"
                 getRendition={(rendition) => {
                     renditionRef.current = rendition
                     renditionRef.current = rendition;
@@ -242,7 +265,18 @@ const Reader = ({ bookmarks, setBookmarks, selections, setSelections, renditionR
             <Widgets setIsSans={setIsSans} isSans={isSans} size={size} changeSize={changeSize} toggleBookmark={toggleBookmark} isBookmarked={isBookmarked} location={location} page={page} />
             {
                 contextMenu.visible && (
-                    <ContextMenu contextMenu={contextMenu} selectedCfiRange={selectedCfiRange} color={color} updateHighlightColor={updateHighlightColor} handleToggleHighlight={handleToggleHighlight} isHighlighted={isHighlighted} hasNote={hasNote} noteInput={noteInput} handleNoteInput={handleNoteInput} />
+                    <ContextMenu
+                        contextMenu={contextMenu}
+                        word={word}
+                        selectedCfiRange={selectedCfiRange}
+                        color={color}
+                        updateHighlightColor={updateHighlightColor}
+                        handleToggleHighlight={handleToggleHighlight}
+                        isHighlighted={isHighlighted}
+                        hasNote={hasNote}
+                        noteInput={noteInput}
+                        handleNoteInput={handleNoteInput}
+                    />
                 )
             }
         </div>

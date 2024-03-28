@@ -1,4 +1,5 @@
-import { Button } from './ui/button';
+import { useState } from "react";
+import { getDictionary } from '../src/lib/dictionary';
 
 import {
     Popover,
@@ -10,7 +11,15 @@ import { Textarea } from "./ui/textarea";
 
 import { Search, Highlighter, BookMarked, MessageSquarePlus, Bookmark as BookmarkIcon, Settings } from 'lucide-react'
 
-const ContextMenu = ({ contextMenu, selectedCfiRange, color, updateHighlightColor, handleToggleHighlight, isHighlighted, hasNote, noteInput, handleNoteInput }) => {
+const ContextMenu = ({ contextMenu, word, selectedCfiRange, color, updateHighlightColor, handleToggleHighlight, isHighlighted, hasNote, noteInput, handleNoteInput }) => {
+    const [definition, setDefinition] = useState('');
+
+    const handleSearch = async (query) => {
+        const dictionary = await getDictionary();
+        const definition = dictionary.get(word.toLowerCase());
+        const defs = definition ? definition.split(".-").slice(0, 2) : [];
+        setDefinition(defs);
+    };
     return (
         <>
             <div className='context-menu border z-10 absolute absolute bg-white rounded-xl p-2 shadow-lg z-10'
@@ -35,11 +44,24 @@ const ContextMenu = ({ contextMenu, selectedCfiRange, color, updateHighlightColo
                     />
                 </div>
                 <div className="options space-x-1">
-                    <button
-                        className='hover:bg-gray-300 p-2 rounded'
-                    >
-                        <BookMarked />
-                    </button>
+                    <Popover>
+                        <PopoverTrigger className={`hover:bg-gray-300 p-2 rounded`} onClick={() => handleSearch(selectedCfiRange)}>
+                            <BookMarked />
+                        </PopoverTrigger>
+                        <PopoverContent
+                            className='bg-white p-3 mt-2 rounded-xl shadow-lg z-10 w-[420px]'
+                        >
+                            {definition.length > 0 ? (
+                                definition.map((def, index) => (
+                                    <div key={index} className="pb-3 mb-3 border-b">
+                                        <p className="text-gray-700 text-sm">{def.trim()}</p>
+                                    </div>
+                                ))
+                            ) : (
+                                <p className="text-gray-600 text-sm">Word not found</p>
+                            )}
+                        </PopoverContent>
+                    </Popover>
                     <button
                         className='hover:bg-gray-300 p-2 rounded'
                     >
@@ -53,6 +75,7 @@ const ContextMenu = ({ contextMenu, selectedCfiRange, color, updateHighlightColo
                     >
                         <Highlighter />
                     </button>
+
                     <Popover>
                         <PopoverTrigger className={`hover:bg-gray-300 p-2 rounded ${hasNote ? "bg-gray-300" : ""}`}>
                             <MessageSquarePlus />
@@ -72,7 +95,7 @@ const ContextMenu = ({ contextMenu, selectedCfiRange, color, updateHighlightColo
                     </Popover>
 
                 </div>
-            </div></>
+            </div ></>
     )
 }
 

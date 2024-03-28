@@ -6,10 +6,14 @@ Features:
 - [x] Bookmark pages
 - [x] Highlight text
 - [x] Add notes
-- [ ] Dictionary
+- [x] Dictionary
+- [ ] Dashboard  
+- [ ] 
 - [ ] Wikipedia lookup
 - [ ] Chat with the book
-- [ ] Dashboard  
   
-**Screenshots**
-![screencap](page.png)
+### Screenshots
+
+![screencap](page.png)  
+**Dictionary usage**  
+![screencap](waffle_dict.png)
